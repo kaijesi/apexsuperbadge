@@ -1,0 +1,103 @@
+public with sharing class MaintenanceRequestHelper {
+    
+    public static void updateWorkOrders(Case[] cases) {
+        
+        // TODO: Complete the method to update workorders
+        
+        // Create list of cases that fulfil requirements
+        Case[] qualifiedCases = new List<Case>();
+        for (Case c : cases) {
+            // Check if the request is closed && type (repair OR routine maintenance)
+            if(c.Status == 'Closed' && (c.Type == 'Repair' || c.Type == 'Routine Maintenance')) {
+                qualifiedCases.add(c);
+            }
+        }
+        System.debug('Case list created with ' + qualifiedCases.size() + ' elements');
+            for (Case c : qualifiedCases) {
+                System.debug(c);
+            }
+        
+        // Qualified cases list exists now: qualifiedCases
+        
+        // Create map from list
+        Map<Id, Case> qualifiedCasesMap = new Map<Id, Case>(qualifiedCases);
+        System.debug('Map of qualified cases: ' + qualifiedCasesMap);
+        
+        // Get Ids of qualified cases
+        Set<Id> qualifiedCasesIds = new Set<Id>();
+        qualifiedCasesIds = qualifiedCasesMap.keySet();
+        System.debug('Ids of qualified cases: ' + qualifiedCasesIds);
+        
+        // For all qualified cases, find the equipment with the shortest maintenance cycle
+        List<AggregateResult> shortestEquipment = 
+            [SELECT Maintenance_Request__r.Id Id, MIN(Equipment__r.Maintenance_Cycle__c) Min
+             FROM Equipment_Maintenance_Item__c
+             WHERE Maintenance_Request__r.Id IN :qualifiedCasesIds
+             GROUP BY Maintenance_Request__r.Id];
+        System.debug(shortestEquipment);
+        
+        // Create List of cases to be created
+        Case[] newCases = new List<Case>();
+        
+        // For each qualified case, create a new case
+        for (Case qualifiedCase : qualifiedCasesMap.values()) {
+            Case newCase = new Case();
+            // Requirements:
+            //// Subject not null
+            newCase.Subject = 'Routine Maintenance';
+            
+            //// Tied to same vehicle
+            newCase.Vehicle__c = qualifiedCase.Vehicle__c;
+            
+            // Type = Routine Maintenance
+            newCase.Type = 'Routine Maintenance';
+            
+            // Report date = today
+            newCase.Date_Reported__c = Date.today();
+            
+            // Due date = today + shortest equipment cycle
+            Date dueDate = null;
+            for (AggregateResult aggregate : shortestEquipment) {
+                if (aggregate.get('Id') == qualifiedCase.Id) {
+                    Integer daysToAdd = Integer.valueOf(aggregate.get('Min'));
+                    dueDate = Date.today().addDays(daysToAdd);
+                }
+            }
+            System.debug('Due Date identified: ' + dueDate);
+            newCase.Date_Due__c = dueDate;
+            
+            // Set original case as parent (so you can find the equipment to copy over)
+            newCase.ParentId = qualifiedCase.Id;
+            
+            // Add to list
+            newCases.add(newCase);
+        }
+        
+        insert newCases;
+        System.debug('New cases created: ' + newCases);
+        
+        // For each new case, clone the equipment records from the closed case (its parent)
+         
+        // For all old cases, look for all equipment item records with their lookup to the equipment as well as the case
+        Equipment_Maintenance_Item__c[] maintenanceItems = [SELECT Equipment__r.Id, Maintenance_Request__r.Id, Maintenance_Request__r.CaseNumber 
+                                                            FROM Equipment_Maintenance_Item__c];
+        System.debug('Maintenance items found: ' + maintenanceItems);
+        
+        // For all new cases, create the new maintenance items
+        Equipment_Maintenance_Item__c[] newMaintenanceItems = new List<Equipment_Maintenance_Item__c>();
+        for (Case newCase : newCases) {
+            for (Equipment_Maintenance_Item__c maintenanceItem : maintenanceItems) {
+                if (maintenanceItem.Maintenance_Request__c == newCase.ParentId) {
+                    Equipment_Maintenance_Item__c newMaintenanceItem = new Equipment_Maintenance_Item__c();
+                    newMaintenanceItem.Equipment__c = maintenanceItem.Equipment__c;
+                    newMaintenanceItem.Maintenance_Request__c = newCase.Id;
+                    newMaintenanceItems.add(newMaintenanceItem);
+                    System.debug('New item added: ' + newMaintenanceItem);
+                }
+            }
+        }
+        insert newMaintenanceItems;
+        
+    }        
+    
+}
