@@ -1,0 +1,53 @@
+@IsTest
+public class CustomTestForMaintenanceRequest {
+    @isTest
+    public static void testWithOneCase() {
+        // Create a case
+        Case initialCase = new Case();
+        initialCase.Status = 'New';
+        initialCase.Type = 'Repair';
+        insert initialCase;
+        System.debug('Case created: ' + initialCase);
+        
+        // Create two equipments
+        Product2[] equipments = new List<Product2>();
+        for (Integer i = 0; i < 2; i++) {
+            Product2 equipment = new Product2();
+            equipment.Name = 'Test Equipment ' + i;
+            equipment.Replacement_Part__c = True;
+            if (i == 0){
+                equipment.Maintenance_Cycle__c = 10;
+            }
+            else {
+                equipment.Maintenance_Cycle__c = 100;
+            }
+            equipments.add(equipment);
+        }
+        insert equipments;
+        System.debug('Equipment added: ' + equipments);
+        
+        // Add maintenance items
+        Equipment_Maintenance_Item__c[] items = new List<Equipment_Maintenance_Item__c>();
+        
+        for (Product2 equipment : equipments) {
+            Equipment_Maintenance_Item__c item = new Equipment_Maintenance_Item__c();
+            item.Equipment__c = equipment.Id;
+            item.Maintenance_Request__c = initialCase.Id;
+            items.add(item);
+            System.debug('Added item: ' + item);
+        }
+        insert items;
+        System.debug('Added all created items: ' + items);
+        
+        // Close the case to set off the MaintenanceRequest trigger invoking the MaintenanceRequestHelper class
+        initialCase.Status = 'Closed';
+        update initialCase;
+        
+        // Check for new cases
+        Case[] newCases = [SELECT Subject FROM Case];
+        for (Case c : newCases) {
+            System.debug(c);
+        }
+        
+    }
+}
