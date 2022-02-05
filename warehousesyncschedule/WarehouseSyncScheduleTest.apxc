@@ -1,0 +1,37 @@
+@IsTest
+public class WarehouseSyncScheduleTest {
+    
+    // Set desired start time
+    public static String CRON_EXP = '0 0 1 * * ? 2022';
+    
+    // Test method to start the scheduled job synchronously
+    static testmethod void testWarehouseSyncSchedule() {
+        // Set callout mock
+    	Test.setMock(HttpCalloutMock.class, new WarehouseCalloutServiceMock());
+        
+        // Start test
+        Test.startTest();
+        // Set the start time
+        String jobId = System.schedule('ScheduledApexTest',
+            CRON_EXP,
+            new WarehouseSyncSchedule());
+        // The job should now not be run yet
+        AsyncApexJob[] apexJobs = [SELECT Id, JobType, MethodName, Status, CompletedDate, ApexClassId, ExtendedStatus, JobItemsProcessed 
+                                   FROM AsyncApexJob];
+        for (AsyncApexJob job : apexJobs) {
+            System.debug('Job created: ' + job);
+            System.assertEquals('Queued', job.Status, 'Status should be \'Queued\'');
+        }
+        Test.stopTest();
+        // Now there should be one job
+        AsyncApexJob[] apexJobsAfter = [SELECT Id, JobType, MethodName, Status, CompletedDate, ApexClassId, ExtendedStatus, JobItemsProcessed 
+                                   FROM AsyncApexJob];
+        
+        System.debug(apexJobsAfter.size() + ' jobs were created.');
+        
+        
+        
+    }
+    
+    
+}
