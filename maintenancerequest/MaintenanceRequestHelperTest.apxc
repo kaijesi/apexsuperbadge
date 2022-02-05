@@ -1,0 +1,90 @@
+@IsTest
+public class MaintenanceRequestHelperTest {
+    
+    /* Requirements:
+     * Positive cases --> Trigger must fire
+     * 		Add assertions --> Check all fields (especially Due Date) incl. relationship to Vehicle, Equipment
+     * 		Add bulk use case --> Insertion of 300 records
+     * Negative cases --> Triger must not fire
+     * 		Add assertions --> Check that no work orders (Case) were created
+    */
+    
+    // Test setup: Create 1 original case, 1 vehicle, 1 equipment, 1 equipment maintenance item 
+    // This is for later relation to new cases
+    @testSetup
+    static void setup() {
+        // Create Vehicle
+        Vehicle__c vehicle = new Vehicle__c(Name='PT Cruiser');
+        insert vehicle;
+        System.debug('Parent Vehicle created: ' + vehicle);
+        
+        // Create 300 cases
+        Case[] initialCases = new List<Case>();
+        for (Integer i = 0; i < 300; i++) {
+            Case initialCase = new Case();
+            initialCase.Status = 'New';
+            initialCase.Type = 'Repair';
+            initialCase.Vehicle__c = vehicle.Id;
+            initialCase.Subject = 'Case' + i;
+            initialCases.add(initialCase);
+            // System.debug('Parent Case created: ' + initialCase);
+        }
+        insert initialCases;
+        System.debug('Parent cases list created n=' + initialCases.size());
+        
+        // Create equipment
+        Product2 equipment = new Product2();
+        equipment.Name = 'Test Equipment ';
+        equipment.Replacement_Part__c = True;
+        equipment.Maintenance_Cycle__c = 10;
+        insert equipment;
+        System.debug('Parent Equipment created: ' + equipment);
+        
+        // Create equipment maintenance item for each case
+        Equipment_Maintenance_Item__c[] maintenanceItems = new List<Equipment_Maintenance_Item__c>();
+        for (Case c : initialCases) {
+            Equipment_Maintenance_Item__c maintenanceItem = new Equipment_Maintenance_Item__c();
+            maintenanceItem.Equipment__c = equipment.Id;
+            maintenanceItem.Maintenance_Request__c = c.Id;
+            maintenanceItems.add(maintenanceItem);
+            // System.debug('Maintenance Item created: ' + maintenanceItem);   
+        }
+        insert maintenanceItems;
+        System.debug('Maintenance items for initial cases created n=' + maintenanceItems.size());
+        
+        
+        
+    } // Dummies available: initialCase, vehicle, equipment, maintenanceItem
+    
+    // Positive & bulk case in one, update the 300 cases to Status = Closed
+    @isTest
+    static void positiveCaseBulk() {
+        Case[] initialCases = [SELECT Id FROM Case];
+        Case[] updatedCases = new List<Case>();
+        for (Case c : initialCases) {
+            c.Status = 'Closed';
+            updatedCases.add(c);
+        }
+        update updatedCases;
+    }
+    
+    // Negative case
+    @isTest
+    static void negativeCase() {
+        Case[] initialCases = [SELECT Id FROM Case];
+        Case[] updatedCases = new List<Case>();
+        for (Case c : initialCases) {
+            c.Status = 'New';
+            updatedCases.add(c);
+        }
+        update updatedCases;
+        
+        // Final number of cases shoudl still be 300
+        Case[] finalCases = [SELECT Id FROM Case];
+        System.debug('Total number of cases = ' + finalCases.size());
+        System.assertEquals(300, finalCases.size(), 'Too many cases! There should still only be 300');
+    }
+    
+
+    
+}
