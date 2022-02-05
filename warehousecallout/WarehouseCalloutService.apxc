@@ -1,0 +1,50 @@
+global class WarehouseCalloutService implements Queueable, Database.AllowsCallouts {
+    
+    private static final String WAREHOUSE_URL = 'https://th-superbadge-apex.herokuapp.com/equipment';
+    global static void externalRequest() {
+        
+        // Make a callout to the external service for warehouse inventory, retrieve list of equipment to be upserted (matchId = Warehouse_SKU__c )
+        // Make the callout
+        Http http = new Http();
+   	 	HttpRequest request = new HttpRequest();
+    	request.setEndpoint(WAREHOUSE_URL);
+    	request.setMethod('GET');
+    	HttpResponse result = http.send(request);
+        System.debug('Return result from http GET call: ' + result.getStatusCode());
+        
+        // Continue if request successful
+        WarehouseCalloutResponse[] warehouseResponseList;
+        if (result.getStatusCode() == 200) {
+            // Deserialise the JSON string into list of equipment
+            String equipmentJson = result.getBody();
+            warehouseResponseList = (WarehouseCalloutResponse[])JSON.deserialize(equipmentJson, WarehouseCalloutResponse[].class); 
+        }
+        
+        // Create list of product to be upserted
+        Product2[] upsertEquipmentList = new List<Product2>();
+        for (WarehouseCalloutResponse warehouseResponse : warehouseResponseList) {
+            Product2 upsertEquipment = new Product2();
+            upsertEquipment.Replacement_Part__c = warehouseResponse.replacement;
+            upsertEquipment.Current_Inventory__c = warehouseResponse.quantity;
+            upsertEquipment.Name = warehouseResponse.name;
+            upsertEquipment.Maintenance_Cycle__c = warehouseResponse.maintenanceperiod;
+            upsertEquipment.Lifespan_Months__c = warehouseResponse.lifespan;
+            upsertEquipment.Cost__c = warehouseResponse.cost;
+            upsertEquipment.Warehouse_SKU__c = warehouseResponse.sku;
+            if (upsertEquipment.Replacement_Part__c) {
+                upsertEquipmentList.add(upsertEquipment);
+                System.debug('New element added: ' + upsertEquipment);
+            }
+        }
+        
+        // Upsert with Warehouse SKU as matching condition
+        Database.UpsertResult[] upsertJob = Database.upsert(upsertEquipmentList, Product2.Warehouse_SKU__c);
+        for (Database.UpsertResult individualResult : upsertJob) {
+            System.debug(individualResult);
+        }
+    }
+    
+    global void execute(QueueableContext cx){
+        externalRequest();
+    }
+}
