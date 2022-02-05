@@ -1,0 +1,23 @@
+@IsTest
+private class WarehouseCalloutServiceTest {
+    
+    static testmethod void testEquipmentCallout() {
+        
+        // Set mock for the HTTP callout
+        Test.setMock(HttpCalloutMock.class, new WarehouseCalloutServiceMock());
+        
+        // Enqueue the external Equipment request
+        WarehouseCalloutService callout = new WarehouseCalloutService();
+        
+        Test.startTest();
+        System.enqueueJob(callout);
+        Test.stopTest();
+        
+        // As we've not created any records beforehand, there should now be one new Equipment record 
+        Product2[] createdProducts = [SELECT Id FROM Product2];
+        System.assertEquals(1, createdProducts.size(), 'Number of created equipment/product2 not correct');
+        
+        
+    }
+
+}
